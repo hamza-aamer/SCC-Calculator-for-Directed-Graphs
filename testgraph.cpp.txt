@@ -1,0 +1,69 @@
+#include "stdafx.h"
+#include "LibFuncs.h"
+//Twitter Combined Data Set = at20graph
+//Google Web Data Set = as20graph
+
+const int MaxSCComponent(TNGraph& ActualG, TNGraph& TransposeG)
+{
+	Stack<TInt> IDStack;
+	ActualG.SinkCluster( IDStack);
+	return TransposeG.StackIDFS(IDStack);
+}
+
+int main(int argc, char* arg[])
+{
+	typedef PNGraph PGraph;  //   directed graph
+
+	PNGraph Forward, Reverse;
+	std::cout << " Generating Twitter Graph...\n";
+	TSnap::TLoadEdgeList<PNGraph>(Forward, Reverse, "C:/Users/devil/Documents/at20graph.txt", 0, 1);
+
+	std::cout << "--------------------------------\n"
+			  << " Nodes in Graph : " << Forward->GetNodes() << "\n"
+			  << " Edges in Graph : " << Forward->GetEdges() << "\n\n";
+
+	std::cout << " Calculating Largest SCC..."
+			  << "\n---------------------------------\n"
+			  << " Nodes in Largest SCC : "
+			  << MaxSCComponent(*Forward, *Reverse)
+			  << "\n---------------------------------\n";
+
+
+	std::cout << "\n\n\n Generating Google Graph...\n";
+	TSnap::TLoadEdgeList<PNGraph>(Forward, Reverse, "C:/Users/devil/Documents/as20graph.txt", 0, 1);
+
+	std::cout << "--------------------------------\n"
+			  << " Nodes in Graph : " << Forward->GetNodes() << "\n"
+			  << " Edges in Graph : " << Forward->GetEdges() << "\n\n";
+
+	std::cout << " Calculating Largest SCC..."
+			  << "\n---------------------------------\n"
+			  << " Nodes in Largest SCC : " 
+			  << MaxSCComponent(*Forward, *Reverse)
+			  << "\n---------------------------------\n";
+
+
+
+	std::cout << "\n\n\n DFS Connection b/w Two Nodes (N1 -> N1) : "
+		<< "\n------------------------------------------------------\n";
+	TInt Node1 = Forward->GetRndNId();	
+	TInt Node2 = Forward->GetRndNId();
+
+	std::cout << "(" << Node1 << " -> " << Node2 << ") : ";
+	if (Forward->IDFS<TInt>(Node1, Node2))
+		std::cout << Node1 << " is Connected to " << Node2 << std::endl;
+	else
+		std::cout << Node1 << " is not Connected to " << Node2 << std::endl;
+
+	Node1 = 0;
+	Node2 = 10453;
+
+	std::cout << "(" << Node1 << " -> " << Node2 << ") : ";
+	if (Forward->IDFS<TInt>(Node1, Node2))
+		std::cout << Node1 << " is Connected to " << Node2 << std::endl;
+	else
+		std::cout << Node1 << " is not Connected to " << Node2 << std::endl;
+
+
+	return 0;
+}

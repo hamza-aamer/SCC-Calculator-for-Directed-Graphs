@@ -1,0 +1,280 @@
+#pragma once
+#include "stdafx.h"
+ 
+//--------------------Custom [Forward + Reverse] Load--------------------//
+//Reads File to generate a graph and its transpose
+template <class PGraph>
+void TLoadEdgeList(PGraph& GraphA, PGraph& GraphT, const TStr& InFNm, const int& SrcColId, const int& DstColId) {
+    TSsParser Ss(InFNm, ssfWhiteSep, true, true, true);
+    GraphA = PGraph::TObj::New();										//Actual Graph
+    GraphT = PGraph::TObj::New();										//Transpose Graph
+
+    int SrcNId, DstNId;
+    while (Ss.Next()) {
+        if (!Ss.GetInt(SrcColId, SrcNId) || !Ss.GetInt(DstColId, DstNId)) { continue; }
+        if (!GraphA->IsNode(SrcNId)) { GraphA->AddNode(SrcNId); }
+        if (!GraphA->IsNode(DstNId)) { GraphA->AddNode(DstNId); }
+        GraphA->AddEdge(SrcNId, DstNId);								//Adding Edge to Actual Graph
+
+        if (!GraphT->IsNode(SrcNId)) { GraphT->AddNode(SrcNId); }
+        if (!GraphT->IsNode(DstNId)) { GraphT->AddNode(DstNId); }
+        GraphT->AddEdge(DstNId, SrcNId);								//Adding Reversed Edge to Transpose Graph
+    }
+    GraphA->Defrag();													//Graph Compression
+    GraphT->Defrag();
+}
+
+
+//--------------------Connection Between Two Nodes Using DFS--------------------//
+
+//Uses Stacks To Perform Depth First Search
+//Connection n1->n2 exists if n2 is found by DFS starting from n1
+
+ template <typename data>
+bool TNGraph::ConnectedIDFS(const data& NId1, const data& NId2, PNGraph& Visited)
+{
+    TInt curr;
+    TIntV OutNodes;
+    Stack<data> TStack;
+
+    TStack.Push(NId1);										//Stack Initialization with starting Node
+    while (!TStack.IsEmpty())									//Untill all possible connections from n1 have been explored
+    {
+        curr = TStack.PopR();
+
+        if (curr == NId2)										//Value of n2 Found : Connection exists
+            return true;
+
+        if (!Visited->IsNode(curr))							//If Node not visited then mark as visited
+        {
+            Visited->AddNode(curr);
+            TStack.Push(curr);
+        }
+
+        OutNodes = GetNode(curr).OutNIdV;						//OutNodes = Node Values connected to curr Node
+        for (int i = 0; i < OutNodes.Len(); i++)				//through Outgoing edges from curr (curr->x)
+            if (NId2 == OutNodes[i])							//Value of n2 found
+                return true;
+            else if (!Visited->IsNode(OutNodes[i]))			//If conneccted node not visited then push to stack
+                TStack.Push(OutNodes[i]);
+    }
+    return false;												//Value of n2 not found in any branch from n1
+}
+template <typename data>
+bool TNGraph::IDFS(const data& NId1, const data NId2)
+{
+    if (!IsNode(NId1)) return false;
+    if (!IsNode(NId2)) return false;
+
+    PNGraph Visited = TNGraph::New();							//Keeps Track Of Visited Nodes
+    return ConnectedIDFS(NId1, NId2, Visited);
+}
+//-----------------------------------------------------------//
+
+//DFS for Calculaing Largest Strongly Connected Component
+
+template <typename data>								//Updated(Faster by 2 seconds)
+void TNGraph::IterativeDFS(const data& Centre, Stack<data>& IdStack, PNGraph& Visited)
+{
+    TInt curr;
+    TIntV OutNodes;
+    Stack<data> TStack;
+
+    DFSStack.Push(Centre);								//DFS Stack Initialization with starting Node
+    IdStack.Push(Centre);									//Push Starting Node to Sink Cluster/Direction Stack 
+    Visited->AddNode(Centre);								//Mark Starting Node as Visited(Add Node To Visited Graph)
+
+    while (!DFSStack.IsEmpty())							//Untill all paths from "Centre" have not been explored
+    {
+        curr = DFSStack.PopR();
+
+        OutNodes = GetNode(curr).OutNIdV;					//OutNodes = Node Values connected to curr Node
+        for (int i = 0; i < OutNodes.Len(); i++)
+            if (!Visited->IsNode(OutNodes[i]))				//If connected node not visited
+            {
+                Visited->AddNode(OutNodes[i]);				//Mark as Visited
+                DFSStack.Push(OutNodes[i]);					//Push To DFS stack(used to Loop)
+                IdStack.Push(OutNodes[i]);					//Push to Direction Stack(Sink Cluster)
+            }
+    }
+}
+
+template <typename data>								//Updated
+void TNGraph::SinkCluster(Stack<data>& IdStack, data Start = -1)			//Fills Stack to determine SCC starting Node
+{
+    TIntV Nodes;
+	  data temp = 0;
+    PNGraph Visited = TNGraph::New();									//Contains all Visited Node IDs
+
+    GetNIdV(Nodes);													//Nodes = All Node Keys of Graph
+    if (Start == -1) Start = Nodes[0];								//If Starting Point not defined start from min value
+
+    for (data i = 0; temp < Nodes.Len() - 1 && i < Nodes.Len(); i++)
+    {
+        if (!Visited->IsNode(Start))
+        {
+            IterativeDFS(Start, IdStack, Visited);					//Perform DFS from Starting Node
+            temp = Visited->GetNodes();								//Fill Stack with visited values
+        }																//Nodes Visited per DFS = Total Visited - Previously visited
+        Start = Nodes[i];
+    }
+}
+
+template <typename data>
+void TNGraph::IterativeStackDFS(const data& Id, PNGraph& Visited)
+{
+    TInt curr;
+    TIntV OutNodes;
+    Stack<data> DFSStack;
+
+    DFSStack.Push(Id);											//Stack Initialization with starting Node
+    Visited->AddNode(Id);	
+
+    while (!DFSStack.IsEmpty())									//Untill all paths from "Centre" have not been explored
+    {
+        curr = DFSStack.PopR();
+
+        OutNodes = GetNode(curr).OutNIdV;							//OutNodes = Node Values connected to curr Node
+        for (int i = 0; i < OutNodes.Len(); i++)
+            if (!Visited->IsNode(OutNodes[i]))					//If conneccted Node not Visited then Push onto DFSStack
+            {
+                DFSStack.Push(OutNodes[i]);
+                Visited->AddNode(OutNodes[i]);					//Marking Node as Visited
+            }
+    }
+}
+
+template <typename data>
+data TNGraph::StackIDFS(Stack<data>& S)							//DFS that uses Filled Stack to determine Starting Node(Sink)
+{
+    TIntV Nodes;
+    GetNIdV(Nodes);										//Nodes = ALl Node Keys of Graph
+    PNGraph Visited = TNGraph::New();						//Graph to keep track of Visited Nodes
+    data MaxSize = 0, temp = 0, prev = 0;					//Max Size Calculation Variables
+
+    while (temp < Nodes.Len() - 1 && !S.IsEmpty())
+    {
+        prev = temp;
+        while (Visited->IsNode(S.Peek()))					//If Stack Top is Visited Node, Pop and Check next Top
+        {
+            S.Pop();
+            if (S.IsEmpty())
+                return MaxSize;
+        }
+
+        IterativeStackDFS(S.PopR(), S, Visited);			//Start from Unvisited Node at Stack Top
+
+        temp = Visited->GetNodes();						//Nodes Visited per Iteration = Total Visited - Previously Visited
+        if (temp - prev > MaxSize)
+            MaxSize = temp - prev;
+    }
+    return MaxSize;
+}
+
+//========================================================//
+
+//Custom Implementation of Stacks Data Structure
+//----------------------------------------------------//
+template <typename data>
+struct Vertex {
+    data Data;
+    Vertex* Next;
+
+    Vertex(const data val = 0, Vertex<data>* nex = nullptr)
+    {
+        Data = val;
+        Next = nex;
+    }
+};
+
+template <typename data>
+class Stack {
+public:
+    Vertex<data>* Top;
+
+    Stack();
+    void Pop();
+    bool IsEmpty();
+    const data Peek();
+    const data PopR();
+    void DisplayStack();
+    void Push(const data);
+    const Vertex<data>* PeekV();
+    ~Stack();
+};
+template<typename data>
+inline Stack<data>::Stack()
+{
+    Top = nullptr;
+}
+
+template<typename data>
+inline void Stack<data>::Push(const data val)
+{
+    Vertex<data>* temp = new Vertex<data>(val, Top);
+    Top = temp;
+}
+
+template<typename data>
+inline void Stack<data>::Pop()
+{
+    if (IsEmpty())
+        return;
+    Vertex<data>* temp = Top;
+    Top = Top->Next;
+    delete temp;
+}
+
+template<typename data>
+inline const data Stack<data>::PopR()
+{
+    const data ret = Peek();
+    Pop();
+    return ret;
+}
+
+template<typename data>
+inline bool Stack<data>::IsEmpty()
+{
+    return Top == nullptr;
+}
+
+template<typename data>
+inline const Vertex<data>* Stack<data>::PeekV()
+{
+    return Top;
+}
+
+template<typename data>
+inline const data Stack<data>::Peek()
+{
+    if (!IsEmpty())
+        return Top->Data;
+    return NULL;
+}
+
+template<typename data>
+inline void Stack<data>::DisplayStack()
+{
+    Vertex <data>* temp = Top;
+    while (temp != nullptr)
+    {
+        std::cout << temp->Data << "  ";
+        temp = temp->Next;
+    }
+}
+
+template<typename data>
+inline Stack<data>::~Stack()
+{
+    Vertex<data>* temp;
+
+    while (Top != nullptr)
+    {
+        temp = Top;
+        Top = Top->Next;
+        delete temp;
+    }
+}
+
+ //=============================================================//
